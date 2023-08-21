@@ -5,9 +5,11 @@ Less for a day， more for a year.
 - 操作系统
 - MySQL
 - Redis
+- Rust
+- 金融
 
 # 计划
-- Rust
+- 计算机网络
 
 # 参考资料
 - [小林coding](https://xiaolincoding.com/)
