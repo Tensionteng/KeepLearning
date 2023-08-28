@@ -30,3 +30,28 @@ OS 线程非常适合少量任务并发，因为线程的创建和上下文切�
 - 有大量 CPU 密集任务需要并行运行时，例如并行计算，选多线程模型，且让线程数等于或者稍大于 CPU 核心数
 - 无所谓时，统一选多线程
 
+# 生命周期
+一言以蔽之，被引用的数据的生命周期**必须大于**引用本身的生命周期。
+
+## 函数与生命周期
+若一个参数返回了引用类型，那么它的生命周期只可能来源于：
+
+- 传入参数的生命周期
+- 函数中某个新建引用的生命周期(极易引起悬垂引用)
+
+## 结构体与生命周期
+为结构体中每个引用显式地标注生命周期
+```
+struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+
+fn main() {
+    let novel = String::from("Call me Ishmael. Some years ago...");
+    let first_sentence = novel.split('.').next().expect("Could not find a '.'");
+    let i = ImportantExcerpt {
+        part: first_sentence,
+    };
+}
+```
+该生命周期标注说明，结构体 `ImportantExcerpt` 所引用的字符串 `str` 必须比该结构体活得更久。
