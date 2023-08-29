@@ -55,3 +55,19 @@ fn main() {
 }
 ```
 该生命周期标注说明，结构体 `ImportantExcerpt` 所引用的字符串 `str` 必须比该结构体活得更久。
+
+# Rust宏元标签
+[参考资料](https://zjp-cn.github.io/tlborm/decl-macros/minutiae/fragment-specifiers.html)
+- item: 程序项
+- block: 块表达式
+- stmt: 语句，注意此选择器不匹配句尾的分号（如果匹配器中提供了分号，会被当做分隔符），但碰到分号是自身的一部分的程序项语句的情况又会匹配。
+- pat: 模式
+- expr: 表达式
+- ty: 类型
+- ident: 标识符或关键字
+- path: 类型表达式 形式的路径
+- tt: token树 (单个 token 或宏匹配定界符 ()、[] 或{} 中的标记)
+- meta: 属性，属性中的内容
+- lifetime: 生存期token
+- vis: 可能为空的可见性限定符
+- literal: 匹配 -?字面量表达式
