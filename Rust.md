@@ -92,3 +92,67 @@ fn main() {
 说说个人理解。我们可以把闭包当作是一个结构体，从外界捕获的变量当作是结构体的字段，若不更改字段，或者字段实现了`copy trait`，都可以认为是Fn；若需要更改某个字段，就说明我们需要创建“可变引用”了，也就是FnMut；最后，如果需要结构体对所有权，那自然就是FnOnce了。需要注意的是，`move`关键字起到了显式移动所有权的作用，不用move的时候也会发生所有权转移，使用move的时候，也不一定发生所有权转移（如i32类型）。
 
 三个闭包的关系是：Fn 继承于 FuMut 继承于 FnOnce。这么看，三父子的称号名副其实。
+
+# Rust并发原语
+Rust 中的原子类型位于`std::sync::atomic`中。
+
+这个 module 的文档中对原子类型有如下描述:
+> Rust 中的原子类型在线程之间提供原始的共享内存通信，并且是其他并发类型的构建基础。
+
+`std::sync::atomic`提供了以下12种原子类型
+```Rust
+AtomicBool
+AtomicI8
+AtomicI16
+AtomicI32
+AtomicI64
+AtomicIsize
+AtomicPtr
+AtomicU8
+AtomicU16
+AtomicU32
+AtomicU64
+AtomicUsize
+```
+以`AtomicI32`为例，其定义是一个结构体，具有以下方法：
+```Rust
+// 对原子类型进行加(或减)运算
+pub fn fetch_add(&self, val: i32, order: Ordering) -> i32 
+// compare and swap
+pub fn compare_exchange(&self, current: i32, new: i32, success: Ordering, failure: Ordering) -> Result<i32, i32>
+// 从原子类型内部读取值
+pub fn load(&self, order: Ordering) -> i32
+// 向原子类型内部写入值
+pub fn store(&self, val: i32, order: Ordering)
+// 交换
+pub fn swap(&self, val: i32, order: Ordering) -> i32
+```
+可以看到每个方法都有一个 `Ordering` 类型的参数，`Ordering` 是一个枚举，表示该操作的内存屏障的强度，用于控制原子操作使用的内存顺序。
+> 注：内存顺序是指 CPU 在访问内存时的顺序，该顺序可能受以下因素的影响：
+> - 代码中的先后顺序
+> - 编译器优化导致在编译阶段发生改变(内存重排序 reordering)
+> - 运行阶段因 CPU 的缓存机制导致顺序被打乱
+
+```Rust
+pub enum Ordering {
+    Relaxed,
+    Release,
+    Acquire,
+    AcqRel,
+    SeqCst,
+}
+```
+- **Relaxed**，这是最宽松的规则，它对编译器和 CPU 不做任何限制，可以乱序
+- **Release**，释放，设定内存屏障(Memory barrier)，保证它之前的操作永远在它之前，但是它后面的操作可能被重排到它前面（用于写入）
+- **Acquire**，获取，设定内存屏障，保证在它之后的访问永远在它之后，但是它之前的操作却有可能被重排到它后面，往往和Release在不同线程中联合使用（用于读取）
+- **AcqRel**，是 `Acquire` 和 `Release` 的结合，同时拥有它们俩提供的保证。对于load，它使用的是 Acquire 命令，对于store，它使用的是 Release 命令，希望该操作之前和之后的读取或写入操作不会被重新排序。AcqRel一般用在fetch_add上
+- **SeqCst**，顺序一致性，SeqCst就像是AcqRel的加强版，它不管原子操作是属于读取还是写入的操作，只要某个线程有用到SeqCst的原子操作，线程中该SeqCst操作前的数据操作绝对不会被重新排在该SeqCst操作之后，且该SeqCst操作后的数据操作也绝对不会被重新排在SeqCst操作前；它还保证所有线程看到的所有的 SeqCst 操作的顺序是一致的（虽然性能低，但是最保险）
+
+为什么会有内存乱序呢，我们写同步代码不是已经保证了代码的同步吗，答案是否定的，看看Memory Ordering的定义。
+> 注：什么是 Memory Ordering, 摘录维基百科中的定义:
+>
+> Memory Ordering (内存排序) 是指 CPU 访问主存时的顺序。可以是编译器在编译时产生，也可以是 CPU 在运行时产生。反映了内存操作重排序，乱序执行，从而充分利用不同内存的总线带宽。现代处理器大都是乱序执行。因此需要内存屏障以确保多线程的同步。
+>
+> 关于对Memory Ordering 的理解，有两个线程都要操作 AtomicI32 类型，假设 AtomicI32 类型数据初始值是0，一个线程执行读操作，另一个线程执行写操作要将数据写为10。假设写操作执行完成后，读线程再执行读操作就一定能读到数据10吗? 答案是不确定的，由于不同编译器的实现和CPU的优化策略，可能会出现虽然写线程执行完写操作了，但最新的数据还存在CPU的寄存器中，还没有同步到内存中。为了确保寄存器到内存中的数据同步，就需要Memory Ordering了。 Release 可以理解为将寄存器的值同步到内存，Acquire 是忽略当前寄存器中存的值，而直接去内存中读取最新的值。
+> 
+>  例如当我们调用原子类型的 store 方法时提供的 Ordering 是 release，在调用原子类型的load 方法时提供的 Ordering 是 Acquire 就可以保证执行读操作的线程一定会读到寄存器里最新的值(**常用操作**)。
