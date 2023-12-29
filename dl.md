@@ -44,3 +44,76 @@
 先看看困惑度的定义：
 $$perplexity(W)={p(x_1,x_2,x_3,...,x_n)}^{-\frac{1}{N}}$$
 其中，$p(x_1,x_2,x_3,...,x_n)$是句子概率
+
+## GRU
+和RNN比，多了两个门，一个是重置门($R_t$)，一个是更新门($Z_t$)
+$$R_t=\sigma(X_tW_{xr}+H_{t-1}W_{hr}+b_r)$$
+$$Z_t=\sigma(X_tW_{xz}+H_{h-1}W_{hz}+b_z)$$
+$$\tilde{H_t}=tanh(X_tW_{xh}+(R_t\odot H_{t-1})W_{hh}+b_h)$$
+$$H_t=Z_t\odot H_{t-1}+(1-Z_t)\odot \tilde{H_t}$$
+
+$R_t$注重于，在更新$H_t$的时候，看多少$X_t$的信息(尽量关注$X_t$，要不要遗忘$H_{t-1}$)
+
+$Z_t$注重于，在更新$H_t$的时候，看多少$H_{t-1}$的信息(尽量不关注$X_t$,要不要用$H_{t-1}$更新$H_{t}$)
+
+## LSTM
+lstm和gru相比就多了一个C，可以看作是第二个隐状态，C没有经过tanh激活函数，所以范围较大，能够保存比H更多的状态
+
+## 双向RNN
+训练的时候直接把batch反过来即可做到“从未来获取过去”，最后两层隐藏层`concat`，得到最终的output
+
+但是，双向RNN**只能用作特征提取或者填空**，不能用作预测，因为无法预知未来
+
+# Attention
+
+## attention的具体计算过程
+
+1. 根据`Query`和`Key`计算两者的相似性或相关性
+   - `Query`表示输入，`Key`表示输出，如将Tom and Jerry翻译成汤姆和杰瑞的时候，Tom是Query，汤姆是Key，这里汤姆也是Value
+   - 计算方法（不同的计算方法对应不同的attention网络）
+     - 向量点积
+     - 余弦相似度
+     - 引入额外的神经网络计算
+2. 对步骤1中的原始分值进行归一化处理，如`softmax`
+3. 将步骤2中得到的权重系数和Value进行加权求和
+    - key和value可以相同也可以不同，key是用于计算相似度的，value才是真正在网络中进行计算的值
+
+## attention的seq2seq
+
+普通seq2seq只会把encoder最后一层RNN的hidden_state和decoder的embedding concat起来，作为输入，虽然最后一层RNN的hidden_state包含了前面序列的所有信息，但是这种高度集中的信息，难免还是有些失真，对于后面的词来说多了很多噪音。
+
+而使用attention之后，可以根据输入，获取相应位置的hidden_state，concat起来。例如我要翻译hello， world，普通seq2seq只能concat hello+world的hidden_state，使用attention之后，我知道“你好”这个单词和hello关系更密切，就可以concat hello的hidden_state，这样预测更准确。
+
+
+## Self Attention
+
+- query，key和value都是同一个东西
+- 相比RNN，更容易捕获句子中**长距离**的相互依赖特征
+  - 因为RNN在计算长距离关系的时候，需要经过若干时间步的累积，在这过程中，有效信息很有可能被遗忘
+  - 在attention中，句子中任意两个单词（query和key）可以直接通过一个函数计算关联度
+
+与CNN、RNN不同，self-attention不包含位置信息，可以通过增加一个位置信息矩阵P（P的维度和输入X一致），将X+P作为自编码输入
+$$P \epsilon \R^{n \times d}: P_{i,2j}=sin(\frac{i}{10000^{2j/d}}),P_{i,2j+1}=cos(\frac{i}{10000^{2j/d}})$$
+
+位于$i+\delta$处的位置编码可以通过$i$处的位置编码线性变换得到，记录的是**特征的相对位置**
+
+## Transformer
+
+- Transformer是一个纯使用注意力机制的编码器，解码器架构
+- 编码器和解码器都有n个Transformer块
+- 每个块使用多头（自）注意力，基于位置的前馈网络，层归一化（不是批量归一化）
+
+encoder：mul-head -> res -> mlp -> res
+
+encoder和decoder之间传递信息：把encoder的输出作为decoder第一个attention块的key和query，encoder本身的输入作为query。attention本身提取出来的特征信息较少，因此往往需要较大的数据量。
+
+# Bert
+
+动机：预训练的模型已经抽取了足够多的特征，新的任务只需要加一个简单的输出层即可复用
+
+结构：只有编码器的Transformer
+
+# GNN
+最简单的GNN层只有三个mlp，分别对应节点，边，全局。这么做没有利用到图本身的结构，例如一个节点，经过一个GNN层的时候，只有他自己的向量得到了计算，是孤立的。
+
+解决方法：`pooling`，即将节点本身和其邻居节点的向量相加，再进入mlp
